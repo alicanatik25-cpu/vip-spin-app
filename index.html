@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VIP Çark</title>
 
 <style>
@@ -14,15 +15,27 @@ body {
 }
 
 #title {
-    margin-top: 25px;
+    margin-top: 20px;
     font-size: 32px;
     font-weight: bold;
     letter-spacing: 1px;
     text-shadow: 0 0 12px #f8d96d;
 }
 
+/* Pointer (ok işareti) */
+#pointer {
+    width: 0; 
+    height: 0; 
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-bottom: 30px solid #f8d96d;
+    margin: 0 auto;
+    margin-top: 15px;
+    filter: drop-shadow(0px 0px 10px #f8d96d);
+}
+
 #wheelCanvas {
-    margin-top: 40px;
+    margin-top: 10px;
 }
 
 #spinBtn {
@@ -43,6 +56,83 @@ body {
     background: linear-gradient(135deg, #ffe9a6, #d6a836);
     transform: scale(1.05);
 }
+
+#spinBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Fireworks canvas overlay */
+#fireworksCanvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+}
+
+/* Sonuç Modal */
+#resultModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#resultBox {
+    background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+    border: 3px solid #f8d96d;
+    border-radius: 20px;
+    padding: 40px 50px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(248, 217, 109, 0.4);
+    animation: popIn 0.4s ease;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+#resultBox h2 {
+    color: #f8d96d;
+    font-size: 28px;
+    margin: 0 0 15px 0;
+}
+
+#resultBox .prize {
+    font-size: 36px;
+    color: #fff;
+    font-weight: bold;
+    margin: 20px 0;
+    text-shadow: 0 0 15px #f8d96d;
+}
+
+#resultBox button {
+    margin-top: 20px;
+    background: linear-gradient(135deg, #f8d96d, #b88a1f);
+    color: #000;
+    padding: 12px 35px;
+    border: none;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* Responsive */
+@media (max-width: 400px) {
+    #title { font-size: 24px; }
+    #spinBtn { padding: 12px 30px; font-size: 18px; }
+    #resultBox { padding: 30px; margin: 20px; }
+    #resultBox .prize { font-size: 28px; }
+}
 </style>
 
 </head>
@@ -50,17 +140,51 @@ body {
 
 <div id="title">🎰 VIP SPIN WHEEL</div>
 
-<canvas id="wheelCanvas" width="360" height="360"></canvas>
+<div id="pointer"></div>
+
+<div style="position:relative;">
+    <canvas id="wheelCanvas" width="360" height="360"></canvas>
+    <canvas id="fireworksCanvas" width="360" height="360"></canvas>
+</div>
 
 <button id="spinBtn">🎡 Çevir</button>
+
+<!-- Sonuç Modal -->
+<div id="resultModal">
+    <div id="resultBox">
+        <h2>🎉 Tebrikler!</h2>
+        <div class="prize" id="prizeText"></div>
+        <button onclick="closeModal()">Tamam</button>
+    </div>
+</div>
+
+<!-- Ses Efektleri -->
+<audio id="tickSound" preload="auto">
+    <source src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" type="audio/mpeg">
+</audio>
+<audio id="winSound" preload="auto">
+    <source src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" type="audio/mpeg">
+</audio>
 
 <script>
 const canvas = document.getElementById("wheelCanvas");
 const ctx = canvas.getContext("2d");
+const fireworksCanvas = document.getElementById("fireworksCanvas");
+const fctx = fireworksCanvas.getContext("2d");
+const tickSound = document.getElementById("tickSound");
+const winSound = document.getElementById("winSound");
+const resultModal = document.getElementById("resultModal");
+const prizeText = document.getElementById("prizeText");
+const spinBtn = document.getElementById("spinBtn");
+
+// Responsive canvas boyutu
+const maxSize = Math.min(window.innerWidth - 40, 360);
+canvas.width = canvas.height = maxSize;
+fireworksCanvas.width = fireworksCanvas.height = maxSize;
 const size = canvas.width;
 const center = size / 2;
 
-// VIP ÖDÜLLER
+// ÖDÜLLER
 const slices = [
     "50 FS",
     "25 FS",
@@ -70,36 +194,26 @@ const slices = [
     "Sürpriz 🎁"
 ];
 
-// VIP renk skalası
-const colors = [
-    "#272727",
-    "#1c1c1c",
-    "#2f2f2f",
-    "#393939",
-    "#202020",
-    "#151515"
-];
-
-// ALTIN YAZI RENGİ
+// RENKLER
+const colors = ["#272727","#1c1c1c","#2f2f2f","#393939","#202020","#151515"];
 const textColor = "#f8d96d";
 
-// Çarkı çiz
-function drawWheel(rotationAngle = 0) {
+// ÇARK ÇİZİMİ
+function drawWheel(angle = 0) {
     const sliceAngle = (2 * Math.PI) / slices.length;
 
     for (let i = 0; i < slices.length; i++) {
-        const angle = i * sliceAngle + rotationAngle;
+        const start = i * sliceAngle + angle;
 
         ctx.beginPath();
         ctx.moveTo(center, center);
-        ctx.arc(center, center, center, angle, angle + sliceAngle);
+        ctx.arc(center, center, center, start, start + sliceAngle);
         ctx.fillStyle = colors[i];
         ctx.fill();
 
-        // Metin
         ctx.save();
         ctx.translate(center, center);
-        ctx.rotate(angle + sliceAngle / 2);
+        ctx.rotate(start + sliceAngle / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = textColor;
         ctx.font = "bold 20px Arial";
@@ -107,47 +221,121 @@ function drawWheel(rotationAngle = 0) {
         ctx.restore();
     }
 }
-
 drawWheel();
 
 // SPIN LOGIC
-let rotation = 0;
 let spinning = false;
+let rotation = 0;
 
-document.getElementById("spinBtn").onclick = () => {
+let lastTickAngle = 0;
+
+spinBtn.onclick = () => {
     if (spinning) return;
     spinning = true;
+    spinBtn.disabled = true;
 
-    let spinVelocity = Math.random() * 20 + 40; // hız
-    const deceleration = 0.97;
+    let velocity = Math.random() * 20 + 40;
+    lastTickAngle = rotation;
 
-    const spinInterval = setInterval(() => {
-        rotation += spinVelocity;
-        spinVelocity *= deceleration;
+    const interval = setInterval(() => {
+        rotation += velocity;
+        velocity *= 0.97;
 
-        ctx.clearRect(0, 0, size, size);
+        // Tick sesi (her 30 derecede bir)
+        if (rotation - lastTickAngle >= 30) {
+            playTick();
+            lastTickAngle = rotation;
+        }
+
+        ctx.clearRect(0,0,size,size);
         drawWheel((rotation * Math.PI) / 180);
 
-        if (spinVelocity < 0.1) {
-            clearInterval(spinInterval);
+        if (velocity < 0.2) {
+            clearInterval(interval);
             spinning = false;
+            spinBtn.disabled = false;
 
             const finalAngle = (rotation % 360 + 360) % 360;
-            const sliceAngleDeg = 360 / slices.length;
-            const winningIndex = Math.floor((360 - finalAngle) / sliceAngleDeg) % slices.length;
+            const sliceDeg = 360 / slices.length;
+            const winningIndex = Math.floor((360 - finalAngle) / sliceDeg) % slices.length;
             const result = slices[winningIndex];
 
-            // TELEGRAM MINI APP'E RESULT GÖNDER
+            // Fireworks animasyonu tetikle
+            launchFireworks();
+
+            // Kazanma sesi
+            playWin();
+
+            // Telegram bot'a result gönder
             if (window.Telegram && Telegram.WebApp) {
                 Telegram.WebApp.sendData(result);
             }
 
+            // Modal göster
             setTimeout(() => {
-                alert("🎉 Tebrikler! Kazandığın ödül: " + result);
+                showResult(result);
             }, 300);
         }
     }, 20);
 };
+
+// Ses fonksiyonları
+function playTick() {
+    tickSound.currentTime = 0;
+    tickSound.volume = 0.3;
+    tickSound.play().catch(() => {});
+}
+
+function playWin() {
+    winSound.currentTime = 0;
+    winSound.volume = 0.6;
+    winSound.play().catch(() => {});
+}
+
+// Modal fonksiyonları
+function showResult(prize) {
+    prizeText.textContent = prize;
+    resultModal.style.display = "flex";
+}
+
+function closeModal() {
+    resultModal.style.display = "none";
+}
+
+// Basit fireworks efekti
+function launchFireworks() {
+    let particles = [];
+
+    for (let i = 0; i < 40; i++) {
+        particles.push({
+            x: center,
+            y: center,
+            radius: Math.random() * 3 + 2,
+            angle: Math.random() * Math.PI * 2,
+            speed: Math.random() * 4 + 2,
+            alpha: 1
+        });
+    }
+
+    const anim = setInterval(() => {
+        fctx.clearRect(0,0,size,size);
+
+        particles.forEach(p => {
+            p.x += Math.cos(p.angle) * p.speed;
+            p.y += Math.sin(p.angle) * p.speed;
+            p.alpha -= 0.02;
+
+            fctx.beginPath();
+            fctx.fillStyle = `rgba(255,215,0,${p.alpha})`;
+            fctx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+            fctx.fill();
+        });
+
+        particles = particles.filter(p => p.alpha > 0);
+
+        if (particles.length === 0) clearInterval(anim);
+    }, 30);
+}
 </script>
 
 </body>
