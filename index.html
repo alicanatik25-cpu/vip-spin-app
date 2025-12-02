@@ -1,62 +1,153 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>VIP Çark</title>
-  <style>
-    body {
-      background: #111;
-      color: #fff;
-      font-family: Arial;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 40px;
-    }
+<meta charset="UTF-8">
+<title>VIP Çark</title>
 
-    #wheel {
-      width: 300px;
-      height: 300px;
-      border-radius: 50%;
-      border: 5px solid #fff;
-      background: conic-gradient(
-        #ff4d4d 0deg 60deg,
-        #ffaa00 60deg 120deg,
-        #ffee00 120deg 180deg,
-        #66ff66 180deg 240deg,
-        #66ccff 240deg 300deg,
-        #cc66ff 300deg 360deg
-      );
-      transition: transform 4s cubic-bezier(0.33, 1, 0.68, 1);
-    }
+<style>
+body {
+    background: #0b0b0f;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    color: #f8d96d;
+    text-align: center;
+}
 
-    #spin {
-      margin-top: 30px;
-      padding: 15px 30px;
-      background: #ffcc00;
-      border: none;
-      border-radius: 8px;
-      font-size: 20px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-  </style>
+#title {
+    margin-top: 25px;
+    font-size: 32px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 0 12px #f8d96d;
+}
+
+#wheelCanvas {
+    margin-top: 40px;
+}
+
+#spinBtn {
+    margin-top: 25px;
+    background: linear-gradient(135deg, #f8d96d, #b88a1f);
+    color: #000;
+    padding: 15px 40px;
+    border: none;
+    border-radius: 12px;
+    font-size: 22px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(248, 217, 109, 0.6);
+    transition: 0.2s;
+}
+
+#spinBtn:hover {
+    background: linear-gradient(135deg, #ffe9a6, #d6a836);
+    transform: scale(1.05);
+}
+</style>
+
 </head>
 <body>
 
-<h2>VIP Çark</h2>
+<div id="title">🎰 VIP SPIN WHEEL</div>
 
-<div id="wheel"></div>
-<button id="spin">Çevir</button>
+<canvas id="wheelCanvas" width="360" height="360"></canvas>
+
+<button id="spinBtn">🎡 Çevir</button>
 
 <script>
-  const wheel = document.getElementById("wheel");
-  const btn = document.getElementById("spin");
+const canvas = document.getElementById("wheelCanvas");
+const ctx = canvas.getContext("2d");
+const size = canvas.width;
+const center = size / 2;
 
-  btn.onclick = () => {
-    const deg = Math.floor(3000 + Math.random() * 3000);
-    wheel.style.transform = `rotate(${deg}deg)`;
-  };
+// VIP ÖDÜLLER
+const slices = [
+    "50 FS",
+    "25 FS",
+    "%20 Bonus",
+    "100₺ Freebet",
+    "15 FS",
+    "Sürpriz 🎁"
+];
+
+// VIP renk skalası
+const colors = [
+    "#272727",
+    "#1c1c1c",
+    "#2f2f2f",
+    "#393939",
+    "#202020",
+    "#151515"
+];
+
+// ALTIN YAZI RENGİ
+const textColor = "#f8d96d";
+
+// Çarkı çiz
+function drawWheel(rotationAngle = 0) {
+    const sliceAngle = (2 * Math.PI) / slices.length;
+
+    for (let i = 0; i < slices.length; i++) {
+        const angle = i * sliceAngle + rotationAngle;
+
+        ctx.beginPath();
+        ctx.moveTo(center, center);
+        ctx.arc(center, center, center, angle, angle + sliceAngle);
+        ctx.fillStyle = colors[i];
+        ctx.fill();
+
+        // Metin
+        ctx.save();
+        ctx.translate(center, center);
+        ctx.rotate(angle + sliceAngle / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = textColor;
+        ctx.font = "bold 20px Arial";
+        ctx.fillText(slices[i], center - 20, 8);
+        ctx.restore();
+    }
+}
+
+drawWheel();
+
+// SPIN LOGIC
+let rotation = 0;
+let spinning = false;
+
+document.getElementById("spinBtn").onclick = () => {
+    if (spinning) return;
+    spinning = true;
+
+    let spinVelocity = Math.random() * 20 + 40; // hız
+    const deceleration = 0.97;
+
+    const spinInterval = setInterval(() => {
+        rotation += spinVelocity;
+        spinVelocity *= deceleration;
+
+        ctx.clearRect(0, 0, size, size);
+        drawWheel((rotation * Math.PI) / 180);
+
+        if (spinVelocity < 0.1) {
+            clearInterval(spinInterval);
+            spinning = false;
+
+            const finalAngle = (rotation % 360 + 360) % 360;
+            const sliceAngleDeg = 360 / slices.length;
+            const winningIndex = Math.floor((360 - finalAngle) / sliceAngleDeg) % slices.length;
+            const result = slices[winningIndex];
+
+            // TELEGRAM MINI APP'E RESULT GÖNDER
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.sendData(result);
+            }
+
+            setTimeout(() => {
+                alert("🎉 Tebrikler! Kazandığın ödül: " + result);
+            }, 300);
+        }
+    }, 20);
+};
 </script>
 
 </body>
