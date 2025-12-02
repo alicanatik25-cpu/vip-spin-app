@@ -22,16 +22,19 @@ body {
     text-shadow: 0 0 12px #f8d96d;
 }
 
-/* Pointer (ok işareti) */
+/* Pointer (ok işareti) - ucu aşağı bakıyor ▼ */
 #pointer {
     width: 0; 
     height: 0; 
     border-left: 20px solid transparent;
     border-right: 20px solid transparent;
-    border-bottom: 30px solid #f8d96d;
+    border-top: 30px solid #f8d96d;
     margin: 0 auto;
     margin-top: 15px;
+    margin-bottom: -5px;
     filter: drop-shadow(0px 0px 10px #f8d96d);
+    position: relative;
+    z-index: 10;
 }
 
 #wheelCanvas {
@@ -221,12 +224,14 @@ const slices = [
 const colors = ["#272727","#1c1c1c","#2f2f2f","#393939","#202020","#151515"];
 const textColor = "#f8d96d";
 
-// ÇARK ÇİZİMİ
+// ÇARK ÇİZİMİ - Ok yukarıda olduğu için -90 derece offset ile başlıyoruz
+const START_OFFSET = -Math.PI / 2; // -90 derece (yukarı)
+
 function drawWheel(angle = 0) {
     const sliceAngle = (2 * Math.PI) / slices.length;
 
     for (let i = 0; i < slices.length; i++) {
-        const start = i * sliceAngle + angle;
+        const start = START_OFFSET + i * sliceAngle + angle;
 
         ctx.beginPath();
         ctx.moveTo(center, center);
@@ -234,15 +239,26 @@ function drawWheel(angle = 0) {
         ctx.fillStyle = colors[i];
         ctx.fill();
 
+        // Dilim kenar çizgisi
+        ctx.strokeStyle = '#f8d96d';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
         ctx.save();
         ctx.translate(center, center);
         ctx.rotate(start + sliceAngle / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = textColor;
-        ctx.font = "bold 20px Arial";
-        ctx.fillText(slices[i], center - 20, 8);
+        ctx.font = "bold 18px Arial";
+        ctx.fillText(slices[i], center - 15, 6);
         ctx.restore();
     }
+
+    // Merkez daire
+    ctx.beginPath();
+    ctx.arc(center, center, 20, 0, Math.PI * 2);
+    ctx.fillStyle = '#f8d96d';
+    ctx.fill();
 }
 drawWheel();
 
@@ -278,12 +294,12 @@ spinBtn.onclick = () => {
             spinning = false;
             spinBtn.disabled = false;
 
-            // Ok yukarıda olduğu için 90 derece offset ekliyoruz
+            // Kazanan dilimi hesapla
             const finalAngle = (rotation % 360 + 360) % 360;
             const sliceDeg = 360 / slices.length;
-            // Yukarıdan başlayarak hesapla (90 derece = yukarı)
-            const adjustedAngle = (360 - finalAngle + 90) % 360;
-            const winningIndex = Math.floor(adjustedAngle / sliceDeg) % slices.length;
+            // Çark saat yönünde döndü, ok sabit yukarıda
+            // finalAngle kadar döndüyse, ok (360 - finalAngle) pozisyonundaki dilimi gösterir
+            const winningIndex = Math.floor(((360 - finalAngle) % 360) / sliceDeg) % slices.length;
             const result = slices[winningIndex];
 
             // Fireworks animasyonu tetikle
