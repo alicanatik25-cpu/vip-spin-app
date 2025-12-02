@@ -158,21 +158,44 @@ body {
     </div>
 </div>
 
-<!-- Ses Efektleri -->
-<audio id="tickSound" preload="auto">
-    <source src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" type="audio/mpeg">
-</audio>
-<audio id="winSound" preload="auto">
-    <source src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" type="audio/mpeg">
-</audio>
 
 <script>
 const canvas = document.getElementById("wheelCanvas");
 const ctx = canvas.getContext("2d");
 const fireworksCanvas = document.getElementById("fireworksCanvas");
 const fctx = fireworksCanvas.getContext("2d");
-const tickSound = document.getElementById("tickSound");
-const winSound = document.getElementById("winSound");
+// Web Audio API ile ses oluştur
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function createTickSound() {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 1200;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.06);
+}
+
+function createWinSound() {
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        const startTime = audioCtx.currentTime + i * 0.12;
+        gain.gain.setValueAtTime(0.2, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
+        osc.start(startTime);
+        osc.stop(startTime + 0.25);
+    });
+}
 const resultModal = document.getElementById("resultModal");
 const prizeText = document.getElementById("prizeText");
 const spinBtn = document.getElementById("spinBtn");
@@ -255,9 +278,12 @@ spinBtn.onclick = () => {
             spinning = false;
             spinBtn.disabled = false;
 
+            // Ok yukarıda olduğu için 90 derece offset ekliyoruz
             const finalAngle = (rotation % 360 + 360) % 360;
             const sliceDeg = 360 / slices.length;
-            const winningIndex = Math.floor((360 - finalAngle) / sliceDeg) % slices.length;
+            // Yukarıdan başlayarak hesapla (90 derece = yukarı)
+            const adjustedAngle = (360 - finalAngle + 90) % 360;
+            const winningIndex = Math.floor(adjustedAngle / sliceDeg) % slices.length;
             const result = slices[winningIndex];
 
             // Fireworks animasyonu tetikle
@@ -281,15 +307,17 @@ spinBtn.onclick = () => {
 
 // Ses fonksiyonları
 function playTick() {
-    tickSound.currentTime = 0;
-    tickSound.volume = 0.3;
-    tickSound.play().catch(() => {});
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        createTickSound();
+    } catch(e) {}
 }
 
 function playWin() {
-    winSound.currentTime = 0;
-    winSound.volume = 0.6;
-    winSound.play().catch(() => {});
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        createWinSound();
+    } catch(e) {}
 }
 
 // Modal fonksiyonları
